@@ -110,6 +110,7 @@ export default class DrawerView extends React.PureComponent<Props, State> {
     Dimensions.removeEventListener('change', this.updateWidth);
   }
 
+  // @ts-ignore
   context!: React.ContextType<typeof ThemeContext>;
 
   private drawerGestureRef = React.createRef<PanGestureHandler>();
@@ -161,6 +162,7 @@ export default class DrawerView extends React.PureComponent<Props, State> {
         descriptors={this.props.descriptors}
         contentComponent={this.props.navigationConfig.contentComponent}
         contentOptions={this.props.navigationConfig.contentOptions}
+        // @ts-ignore
         drawerPosition={this.props.navigationConfig.drawerPosition}
         style={this.props.navigationConfig.style}
         {...this.props.navigationConfig}

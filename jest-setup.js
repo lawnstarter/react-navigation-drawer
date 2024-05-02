@@ -35,7 +35,7 @@ jest.mock('react-native-reanimated', () => ({
     Clock: jest.fn(),
     Value: jest.fn(),
     onChange: jest.fn(),
-    interpolate: jest.fn(),
+    interpolateNode: jest.fn(),
     abs: jest.fn(),
     add: jest.fn(),
     sub: jest.fn(),

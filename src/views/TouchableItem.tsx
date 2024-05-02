@@ -40,7 +40,7 @@ export default class TouchableItem extends React.Component<Props> {
      */
     if (
       Platform.OS === 'android' &&
-      Platform.Version >= ANDROID_VERSION_LOLLIPOP
+      Number(Platform.Version) >= ANDROID_VERSION_LOLLIPOP
     ) {
       const { style, ...rest } = this.props;
       return (

@@ -31,6 +31,7 @@ export default class DrawerNavigatorItems extends React.Component<
   };
 
   static contextType = ThemeContext;
+  // @ts-ignore
   context!: React.ContextType<typeof ThemeContext>;
 
   private getActiveTintColor() {

@@ -90,7 +90,10 @@ export default class DrawerView extends React.PureComponent<Props, State> {
       this.handleDrawerOpen();
     }
 
-    Dimensions.addEventListener('change', this.updateWidth);
+    this.dimensionsChangeEventListener = (Dimensions.addEventListener(
+      'change',
+      this.updateWidth
+    ) as unknown) as undefined;
   }
 
   componentDidUpdate(prevProps: Props) {
@@ -107,11 +110,17 @@ export default class DrawerView extends React.PureComponent<Props, State> {
   }
 
   componentWillUnmount() {
-    Dimensions.removeEventListener('change', this.updateWidth);
+    if (this.dimensionsChangeEventListener) {
+      this.dimensionsChangeEventListener.remove();
+    } else if (typeof Dimensions.removeEventListener === 'function') {
+      Dimensions.removeEventListener('change', this.updateWidth);
+    }
   }
 
   // @ts-ignore
   context!: React.ContextType<typeof ThemeContext>;
+
+  private dimensionsChangeEventListener?: { remove: () => void };
 
   private drawerGestureRef = React.createRef<PanGestureHandler>();
 

@@ -112,7 +112,9 @@ export default class DrawerView extends React.PureComponent<Props, State> {
   componentWillUnmount() {
     if (this.dimensionsChangeEventListener) {
       this.dimensionsChangeEventListener.remove();
+      // @ts-ignore
     } else if (typeof Dimensions.removeEventListener === 'function') {
+      // @ts-ignore
       Dimensions.removeEventListener('change', this.updateWidth);
     }
   }

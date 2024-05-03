@@ -15,8 +15,7 @@
     "typescript": "tsc --noEmit",
     "example": "yarn --cwd example",
     "bootstrap": "yarn example && yarn",
-    "build": "bob build",
-    "release": "release-it"
+    "build": "bob build"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
@@ -45,7 +44,6 @@
     "@commitlint/config-conventional": "^7.5.0",
     "@expo/vector-icons": "^10.0.1",
     "@react-native-community/bob": "^0.3.4",
-    "@release-it/conventional-changelog": "^1.1.0",
     "@types/jest": "^24.0.11",
     "@types/react": "^16.8.13",
     "@types/react-native": "^0.57.49",
@@ -69,7 +67,6 @@
     "react-native-testing-library": "^1.7.0",
     "react-navigation": "^4.0.7",
     "react-test-renderer": "16.8.6",
-    "release-it": "^12.3.6",
     "typescript": "^4.1.6"
   },
   "dependencies": {},

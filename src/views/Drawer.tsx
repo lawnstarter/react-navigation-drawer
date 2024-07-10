@@ -562,6 +562,7 @@ export default class Drawer extends React.PureComponent<Props> {
                         -1
                       ),
                     },
+                    // @ts-ignore
                     overlayStyle,
                   ]}
                 />

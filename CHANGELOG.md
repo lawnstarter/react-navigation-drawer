@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/lawnstarter/react-navigation-drawer/compare/v2.4.0...v2.4.1) (2024-07-10)
+
+
+### Bug Fixes
+
+* ignore type error in Drawer ([c23de1d](https://github.com/lawnstarter/react-navigation-drawer/commit/c23de1dc6de26dd04a5904675d1a3781b1374c70))
+
 ## [2.4.0](https://github.com/lawnstarter/react-navigation-drawer/compare/2e0b8aa...v2.4.0) (2024-05-03)
 
 ### Bug Fixes

@@ -53,8 +53,12 @@ type Props = {
   overlayStyle?: ViewStyle;
   drawerStyle?: ViewStyle;
   sceneContainerStyle?: ViewStyle;
-  renderDrawerContent: (props: { progress: Animated.SharedValue<number> }) => React.ReactNode;
-  renderSceneContent: (props: { progress: Animated.SharedValue<number> }) => React.ReactNode;
+  renderDrawerContent: (props: {
+    progress: Animated.SharedValue<number>;
+  }) => React.ReactNode;
+  renderSceneContent: (props: {
+    progress: Animated.SharedValue<number>;
+  }) => React.ReactNode;
   gestureHandlerProps?: React.ComponentProps<typeof PanGestureHandler>;
 };
 
@@ -82,12 +86,15 @@ const Drawer = ({
   const isSwiping = useSharedValue(false);
   const isStatusBarHidden = React.useRef(false);
 
-  const toggleStatusBar = React.useCallback((hidden: boolean) => {
-    if (hideStatusBar && isStatusBarHidden.current !== hidden) {
-      isStatusBarHidden.current = hidden;
-      StatusBar.setHidden(hidden, statusBarAnimation);
-    }
-  }, [hideStatusBar, statusBarAnimation]);
+  const toggleStatusBar = React.useCallback(
+    (hidden: boolean) => {
+      if (hideStatusBar && isStatusBarHidden.current !== hidden) {
+        isStatusBarHidden.current = hidden;
+        StatusBar.setHidden(hidden, statusBarAnimation);
+      }
+    },
+    [hideStatusBar, statusBarAnimation]
+  );
 
   const animateDrawer = React.useCallback((toValue: number) => {
     'worklet';
@@ -105,70 +112,71 @@ const Drawer = ({
   }, [open, drawerPosition, animateDrawer]);
 
   const panGesture = Gesture.Pan()
-  .enabled(gestureEnabled)
-  .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
-  .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
-  .onStart(() => {
-    'worklet';
-    const startX = translateX.value;
-    isSwiping.value = true;
-    runOnJS(toggleStatusBar)(true);
-    return { startX };
-  })
-  .onUpdate((event) => {
-    'worklet';
-    const dragX = translateX.value + event.translationX;
-    const isRightDrawer = drawerPosition === 'right';
-    
-    if (isRightDrawer) {
-      translateX.value = Math.max(Math.min(dragX, 0), -drawerWidth.value);
-    } else {
-      translateX.value = Math.min(Math.max(dragX, 0), drawerWidth.value);
-    }
-    
-    progress.value = Math.abs(translateX.value) / (drawerWidth.value || 1);
-  })
-  .onFinalize((event) => {
-    'worklet';
-    const velocity = event.velocityX;
-    const shouldOpen = 
-      Math.abs(velocity) > swipeVelocityThreshold ||
-      Math.abs(translateX.value) > swipeDistanceThreshold;
-    
-    const isRightDrawer = drawerPosition === 'right';
-    const targetValue = shouldOpen
-      ? isRightDrawer
-        ? -drawerWidth.value
-        : drawerWidth.value
-      : 0;
+    .enabled(gestureEnabled)
+    .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
+    .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
+    .onStart(() => {
+      'worklet';
+      const startX = translateX.value;
+      isSwiping.value = true;
+      runOnJS(toggleStatusBar)(true);
+      return { startX };
+    })
+    .onUpdate((event) => {
+      'worklet';
+      const dragX = translateX.value + event.translationX;
+      const isRightDrawer = drawerPosition === 'right';
 
-    animateDrawer(targetValue);
-    isSwiping.value = false;
-    runOnJS(toggleStatusBar)(shouldOpen);
-    
-    if (shouldOpen) {
-      runOnJS(onOpen)();
-    } else {
-      runOnJS(onClose)();
-    }
-  });
+      if (isRightDrawer) {
+        translateX.value = Math.max(Math.min(dragX, 0), -drawerWidth.value);
+      } else {
+        translateX.value = Math.min(Math.max(dragX, 0), drawerWidth.value);
+      }
+
+      progress.value = Math.abs(translateX.value) / (drawerWidth.value || 1);
+    })
+    .onFinalize((event) => {
+      'worklet';
+      const velocity = event.velocityX;
+      const shouldOpen =
+        Math.abs(velocity) > swipeVelocityThreshold ||
+        Math.abs(translateX.value) > swipeDistanceThreshold;
+
+      const isRightDrawer = drawerPosition === 'right';
+      const targetValue = shouldOpen
+        ? isRightDrawer
+          ? -drawerWidth.value
+          : drawerWidth.value
+        : 0;
+
+      animateDrawer(targetValue);
+      isSwiping.value = false;
+      runOnJS(toggleStatusBar)(shouldOpen);
+
+      if (shouldOpen) {
+        runOnJS(onOpen)();
+      } else {
+        runOnJS(onClose)();
+      }
+    });
 
   const tapGestureHandler = Gesture.Tap()
-  .enabled(gestureEnabled)
-  .onEnd(() => {
-    if (progress.value > PROGRESS_EPSILON) {
-      runOnJS(onClose)();
-    }
-  });
+    .enabled(gestureEnabled)
+    .onEnd(() => {
+      if (progress.value > PROGRESS_EPSILON) {
+        runOnJS(onClose)();
+      }
+    });
 
   const drawerAnimatedStyle = useAnimatedStyle(() => {
     const drawerPositionValue = drawerPosition === 'right' ? 'right' : 'left';
-    const offsetValue = drawerType === 'back'
-      ? I18nManager.isRTL
-        ? -drawerWidth.value
-        : drawerWidth.value
-      : -drawerWidth.value;
-  
+    const offsetValue =
+      drawerType === 'back'
+        ? I18nManager.isRTL
+          ? -drawerWidth.value
+          : drawerWidth.value
+        : -drawerWidth.value;
+
     return {
       transform: [{ translateX: translateX.value }],
       position: 'absolute',
@@ -176,20 +184,21 @@ const Drawer = ({
       bottom: 0,
       width: '80%',
       maxWidth: '100%',
-      ...(drawerPositionValue === 'right' 
+      ...(drawerPositionValue === 'right'
         ? { right: offsetValue }
-        : { left: offsetValue }
-      ),
+        : { left: offsetValue }),
       zIndex: drawerType === 'back' ? -1 : 0,
+      // Add opacity that only shows drawer after layout
+      opacity: drawerWidth.value === 0 ? 0 : 1,
     };
   });
 
   const contentAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ 
-      translateX: drawerType === 'front' 
-        ? 0 
-        : translateX.value 
-    }],
+    transform: [
+      {
+        translateX: drawerType === 'front' ? 0 : translateX.value,
+      },
+    ],
   }));
 
   const overlayAnimatedStyle = useAnimatedStyle(() => ({
@@ -212,10 +221,7 @@ const Drawer = ({
   return (
     <DrawerProgressContext.Provider value={progress}>
       <GestureDetector gesture={panGesture}>
-        <Animated.View
-          style={styles.main}
-          onLayout={handleContainerLayout}
-        >
+        <Animated.View style={styles.main} onLayout={handleContainerLayout}>
           <Animated.View
             style={[styles.content, contentAnimatedStyle, sceneContainerStyle]}
             importantForAccessibility={open ? 'no-hide-descendants' : 'yes'}
@@ -223,11 +229,7 @@ const Drawer = ({
             {renderSceneContent({ progress })}
             <GestureDetector gesture={tapGestureHandler}>
               <Animated.View
-                style={[
-                  styles.overlay,
-                  overlayAnimatedStyle,
-                  overlayStyle,
-                ]}
+                style={[styles.overlay, overlayAnimatedStyle, overlayStyle]}
               />
             </GestureDetector>
           </Animated.View>
@@ -249,6 +251,7 @@ const Drawer = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'white',
+    opacity: 0,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

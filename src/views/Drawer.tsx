@@ -19,13 +19,13 @@ import Animated, {
   runOnJS,
   interpolate,
   cancelAnimation,
+  type SharedValue,
   Extrapolation,
 } from 'react-native-reanimated';
 import DrawerProgressContext from '../utils/DrawerProgressContext';
 
-const PROGRESS_EPSILON = 0.05;
 const SWIPE_DISTANCE_MINIMUM = 5;
-const SWIPE_DISTANCE_THRESHOLD_DEFAULT = 60;
+const SWIPE_DISTANCE_THRESHOLD_DEFAULT = 20;
 
 const SPRING_CONFIG = {
   damping: 500,
@@ -54,10 +54,10 @@ type Props = {
   drawerStyle?: ViewStyle;
   sceneContainerStyle?: ViewStyle;
   renderDrawerContent: (props: {
-    progress: Animated.SharedValue<number>;
+    progress: SharedValue<number>;
   }) => React.ReactNode;
   renderSceneContent: (props: {
-    progress: Animated.SharedValue<number>;
+    progress: SharedValue<number>;
   }) => React.ReactNode;
   gestureHandlerProps?: React.ComponentProps<typeof PanGestureHandler>;
 };
@@ -84,14 +84,13 @@ const Drawer = ({
   const drawerWidth = useSharedValue(0);
   const containerWidth = useSharedValue(0);
   const isSwiping = useSharedValue(false);
+  const isValidStart = useSharedValue(false);
   const isStatusBarHidden = React.useRef(false);
 
   const toggleStatusBar = React.useCallback(
     (hidden: boolean) => {
-      if (hideStatusBar && isStatusBarHidden.current !== hidden) {
-        isStatusBarHidden.current = hidden;
-        StatusBar.setHidden(hidden, statusBarAnimation);
-      }
+      isStatusBarHidden.current = hidden;
+      StatusBar.setHidden(hidden, statusBarAnimation);
     },
     [hideStatusBar, statusBarAnimation]
   );
@@ -115,15 +114,21 @@ const Drawer = ({
     .enabled(gestureEnabled)
     .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
+    .onTouchesDown((event) => {
+      isValidStart.value =
+        event.allTouches[0].absoluteX < swipeDistanceThreshold || open;
+    })
     .onStart(() => {
       'worklet';
       const startX = translateX.value;
-      isSwiping.value = true;
+      isSwiping.value = isValidStart.value;
       runOnJS(toggleStatusBar)(true);
       return { startX };
     })
     .onUpdate((event) => {
       'worklet';
+      if (!isSwiping.value) return;
+
       const dragX = translateX.value + event.translationX;
       const isRightDrawer = drawerPosition === 'right';
 
@@ -137,6 +142,8 @@ const Drawer = ({
     })
     .onFinalize((event) => {
       'worklet';
+      if (!isSwiping.value) return;
+
       const velocity = event.velocityX;
       const shouldOpen =
         Math.abs(velocity) > swipeVelocityThreshold ||
@@ -160,12 +167,13 @@ const Drawer = ({
       }
     });
 
-  const tapGestureHandler = Gesture.Tap()
+  const overlayGesture = Gesture.Tap()
     .enabled(gestureEnabled)
+    .simultaneousWithExternalGesture(panGesture)
     .onEnd(() => {
-      if (progress.value > PROGRESS_EPSILON) {
-        runOnJS(onClose)();
-      }
+      'worklet';
+      runOnJS(toggleStatusBar)(false);
+      runOnJS(onClose)();
     });
 
   const drawerAnimatedStyle = useAnimatedStyle(() => {
@@ -188,7 +196,6 @@ const Drawer = ({
         ? { right: offsetValue }
         : { left: offsetValue }),
       zIndex: drawerType === 'back' ? -1 : 0,
-      // Add opacity that only shows drawer after layout
       opacity: drawerWidth.value === 0 ? 0 : 1,
     };
   });
@@ -227,7 +234,7 @@ const Drawer = ({
             importantForAccessibility={open ? 'no-hide-descendants' : 'yes'}
           >
             {renderSceneContent({ progress })}
-            <GestureDetector gesture={tapGestureHandler}>
+            <GestureDetector gesture={overlayGesture}>
               <Animated.View
                 style={[styles.overlay, overlayAnimatedStyle, overlayStyle]}
               />

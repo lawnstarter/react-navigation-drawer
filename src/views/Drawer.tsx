@@ -23,9 +23,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import DrawerProgressContext from '../utils/DrawerProgressContext';
 
+const EDGE_WIDTH = 30;
 const PROGRESS_EPSILON = 0.05;
 const SWIPE_DISTANCE_MINIMUM = 5;
-const SWIPE_DISTANCE_THRESHOLD_DEFAULT = 60;
+const SWIPE_DISTANCE_THRESHOLD_DEFAULT = 20;
 
 const SPRING_CONFIG = {
   damping: 500,
@@ -85,6 +86,7 @@ const Drawer = ({
   const containerWidth = useSharedValue(0);
   const isSwiping = useSharedValue(false);
   const isStatusBarHidden = React.useRef(false);
+  const touchStartX = useSharedValue(0);
 
   const toggleStatusBar = React.useCallback(
     (hidden: boolean) => {
@@ -115,8 +117,16 @@ const Drawer = ({
     .enabled(gestureEnabled)
     .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
+    .onTouchesDown((event) => {
+      'worklet';
+      touchStartX.value = event.allTouches[0].absoluteX;
+    })
     .onStart(() => {
       'worklet';
+      if (!open && touchStartX.value > EDGE_WIDTH) {
+        return false;
+      }
+
       const startX = translateX.value;
       isSwiping.value = true;
       runOnJS(toggleStatusBar)(true);
@@ -163,9 +173,8 @@ const Drawer = ({
   const tapGestureHandler = Gesture.Tap()
     .enabled(gestureEnabled)
     .onEnd(() => {
-      if (progress.value > PROGRESS_EPSILON) {
-        runOnJS(onClose)();
-      }
+      runOnJS(toggleStatusBar)(false);
+      runOnJS(onClose)();
     });
 
   const drawerAnimatedStyle = useAnimatedStyle(() => {

@@ -105,8 +105,10 @@ const Drawer = ({
   React.useEffect(() => {
     if (open) {
       animateDrawer(drawerWidth.value * (drawerPosition === 'right' ? -1 : 1));
+      runOnJS(toggleStatusBar)(true);
     } else {
       animateDrawer(0);
+      runOnJS(toggleStatusBar)(false);
     }
   }, [open, drawerPosition, animateDrawer]);
 
@@ -122,7 +124,6 @@ const Drawer = ({
       'worklet';
       const startX = translateX.value;
       isSwiping.value = isValidStart.value;
-      runOnJS(toggleStatusBar)(true);
       return { startX };
     })
     .onUpdate((event) => {
@@ -158,7 +159,6 @@ const Drawer = ({
 
       animateDrawer(targetValue);
       isSwiping.value = false;
-      runOnJS(toggleStatusBar)(shouldOpen);
 
       if (shouldOpen) {
         runOnJS(onOpen)();
@@ -172,7 +172,6 @@ const Drawer = ({
     .simultaneousWithExternalGesture(panGesture)
     .onEnd(() => {
       'worklet';
-      runOnJS(toggleStatusBar)(false);
       runOnJS(onClose)();
     });
 

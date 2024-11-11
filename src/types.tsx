@@ -8,7 +8,7 @@ import {
   NavigationScreenConfig,
 } from 'react-navigation';
 import { StyleProp, ViewStyle, TextStyle } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { SharedValue } from 'react-native-reanimated';
 
 export type Scene = {
   route: NavigationRoute;
@@ -110,7 +110,7 @@ export type DrawerNavigatorItemsProps = {
 export type DrawerContentComponentProps = DrawerNavigatorItemsProps & {
   navigation: NavigationScreenProp<NavigationDrawerState>;
   descriptors: SceneDescriptorMap;
-  drawerOpenProgress: Animated.Node<number>;
+  drawerOpenProgress: SharedValue<number>;
   screenProps: unknown;
 };
 

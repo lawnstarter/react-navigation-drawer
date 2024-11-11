@@ -279,6 +279,8 @@ export default class DrawerView extends React.PureComponent<Props, State> {
     return (
       <DrawerGestureContext.Provider value={this.drawerGestureRef}>
         <Drawer
+          keyboardDismissMode='on-drag'
+          swipeVelocityThreshold={0.3}
           open={navigation.state.isDrawerOpen}
           gestureEnabled={
             drawerLockMode !== 'locked-open' &&
@@ -298,7 +300,7 @@ export default class DrawerView extends React.PureComponent<Props, State> {
           overlayStyle={{ backgroundColor: overlayColor }}
           swipeEdgeWidth={edgeWidth}
           swipeDistanceThreshold={minSwipeDistance}
-          hideStatusBar={hideStatusBar}
+          hideStatusBar={!!hideStatusBar}
           statusBarAnimation={statusBarAnimation}
           renderDrawerContent={this.renderNavigationView}
           renderSceneContent={this.renderContent}

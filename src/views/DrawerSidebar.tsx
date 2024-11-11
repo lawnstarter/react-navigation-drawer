@@ -5,7 +5,7 @@ import {
   NavigationRoute,
   NavigationScreenProp,
 } from 'react-navigation';
-import Animated from 'react-native-reanimated';
+import { SharedValue } from 'react-native-reanimated';
 import {
   Scene,
   NavigationDrawerState,
@@ -19,7 +19,7 @@ type Props = {
   screenProps?: unknown;
   navigation: NavigationScreenProp<NavigationDrawerState>;
   descriptors: SceneDescriptorMap;
-  drawerOpenProgress: Animated.Node<number>;
+  drawerOpenProgress: SharedValue<number>;
   drawerPosition: 'left' | 'right';
   style?: ViewStyle;
 };

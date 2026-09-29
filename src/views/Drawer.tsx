@@ -26,6 +26,7 @@ import DrawerProgressContext from '../utils/DrawerProgressContext';
 
 const SWIPE_DISTANCE_MINIMUM = 5;
 const SWIPE_DISTANCE_THRESHOLD_DEFAULT = 20;
+const SWIPE_EDGE_WIDTH_DEFAULT = 32;
 
 const SPRING_CONFIG = {
   damping: 500,
@@ -45,7 +46,7 @@ type Props = {
   drawerPosition: 'left' | 'right';
   drawerType: 'front' | 'back' | 'slide';
   keyboardDismissMode: 'none' | 'on-drag';
-  swipeEdgeWidth: number;
+  swipeEdgeWidth?: number;
   swipeDistanceThreshold?: number;
   swipeVelocityThreshold: number;
   hideStatusBar: boolean;
@@ -69,6 +70,7 @@ const Drawer = ({
   gestureEnabled = true,
   drawerPosition = I18nManager.isRTL ? 'left' : 'right',
   drawerType = 'front',
+  swipeEdgeWidth = SWIPE_EDGE_WIDTH_DEFAULT,
   swipeDistanceThreshold = SWIPE_DISTANCE_THRESHOLD_DEFAULT,
   swipeVelocityThreshold = 500,
   hideStatusBar = false,
@@ -116,8 +118,19 @@ const Drawer = ({
     }
   }, [open, drawerPosition]);
 
+  // While closed, only a touch that starts at the drawer's edge may activate the
+  // pan. Without this, any horizontal drag over SWIPE_DISTANCE_MINIMUM anywhere on
+  // the screen activates it and cancels the touch of every horizontal ScrollView
+  // or FlatList in the scene. While open, the whole area stays draggable so the
+  // drawer can be swiped closed.
+  const edgeHitSlop =
+    drawerPosition === 'right'
+      ? { right: 0, width: open ? undefined : swipeEdgeWidth }
+      : { left: 0, width: open ? undefined : swipeEdgeWidth };
+
   const panGesture = Gesture.Pan()
     .enabled(gestureEnabled)
+    .hitSlop(edgeHitSlop)
     .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .onTouchesDown((event) => {

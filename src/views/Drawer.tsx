@@ -15,10 +15,10 @@ import {
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  useDerivedValue,
   withSpring,
   runOnJS,
   interpolate,
-  cancelAnimation,
   type SharedValue,
   Extrapolation,
 } from 'react-native-reanimated';
@@ -26,6 +26,7 @@ import DrawerProgressContext from '../utils/DrawerProgressContext';
 
 const SWIPE_DISTANCE_MINIMUM = 5;
 const SWIPE_DISTANCE_THRESHOLD_DEFAULT = 20;
+const SWIPE_EDGE_WIDTH_DEFAULT = 32;
 
 const SPRING_CONFIG = {
   damping: 500,
@@ -45,7 +46,7 @@ type Props = {
   drawerPosition: 'left' | 'right';
   drawerType: 'front' | 'back' | 'slide';
   keyboardDismissMode: 'none' | 'on-drag';
-  swipeEdgeWidth: number;
+  swipeEdgeWidth?: number;
   swipeDistanceThreshold?: number;
   swipeVelocityThreshold: number;
   hideStatusBar: boolean;
@@ -69,6 +70,7 @@ const Drawer = ({
   gestureEnabled = true,
   drawerPosition = I18nManager.isRTL ? 'left' : 'right',
   drawerType = 'front',
+  swipeEdgeWidth = SWIPE_EDGE_WIDTH_DEFAULT,
   swipeDistanceThreshold = SWIPE_DISTANCE_THRESHOLD_DEFAULT,
   swipeVelocityThreshold = 500,
   hideStatusBar = false,
@@ -79,7 +81,6 @@ const Drawer = ({
   renderDrawerContent,
   renderSceneContent,
 }: Props) => {
-  const progress = useSharedValue(0);
   const translateX = useSharedValue(0);
   const drawerWidth = useSharedValue(0);
   const containerWidth = useSharedValue(0);
@@ -87,44 +88,59 @@ const Drawer = ({
   const isValidStart = useSharedValue(false);
   const isStatusBarHidden = React.useRef(false);
 
+  // Derive progress reactively from translateX and drawerWidth on the UI thread
+  const progress = useDerivedValue(() => {
+    if (drawerWidth.value === 0) return 0;
+    return Math.abs(translateX.value) / drawerWidth.value;
+  });
+
   const toggleStatusBar = React.useCallback(
     (hidden: boolean) => {
-      isStatusBarHidden.current = hidden;
-      StatusBar.setHidden(hidden, statusBarAnimation);
+      if (hideStatusBar) {
+        isStatusBarHidden.current = hidden;
+        StatusBar.setHidden(hidden, statusBarAnimation);
+      }
     },
     [hideStatusBar, statusBarAnimation]
   );
 
-  const animateDrawer = React.useCallback((toValue: number) => {
-    'worklet';
-    cancelAnimation(translateX);
-    translateX.value = withSpring(toValue, SPRING_CONFIG);
-    progress.value = Math.abs(toValue) / (drawerWidth.value || 1);
-  }, []);
-
+  // Open/close effect — runs on JS thread, withSpring works from JS in Reanimated 3+
   React.useEffect(() => {
     if (open) {
-      animateDrawer(drawerWidth.value * (drawerPosition === 'right' ? -1 : 1));
-      runOnJS(toggleStatusBar)(true);
+      const target = drawerWidth.value * (drawerPosition === 'right' ? -1 : 1);
+      if (drawerWidth.value > 0) {
+        translateX.value = withSpring(target, SPRING_CONFIG);
+      }
+      toggleStatusBar(true);
     } else {
-      animateDrawer(0);
-      runOnJS(toggleStatusBar)(false);
+      translateX.value = withSpring(0, SPRING_CONFIG);
+      toggleStatusBar(false);
     }
-  }, [open, drawerPosition, animateDrawer]);
+  }, [open, drawerPosition]);
+
+  // While closed, only a touch that starts at the drawer's edge may activate the
+  // pan. Without this, any horizontal drag over SWIPE_DISTANCE_MINIMUM anywhere on
+  // the screen activates it and cancels the touch of every horizontal ScrollView
+  // or FlatList in the scene. While open, the whole area stays draggable so the
+  // drawer can be swiped closed.
+  const edgeHitSlop =
+    drawerPosition === 'right'
+      ? { right: 0, width: open ? undefined : swipeEdgeWidth }
+      : { left: 0, width: open ? undefined : swipeEdgeWidth };
 
   const panGesture = Gesture.Pan()
     .enabled(gestureEnabled)
+    .hitSlop(edgeHitSlop)
     .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .onTouchesDown((event) => {
+      'worklet';
       isValidStart.value =
         event.allTouches[0].absoluteX < swipeDistanceThreshold || open;
     })
     .onStart(() => {
       'worklet';
-      const startX = translateX.value;
       isSwiping.value = isValidStart.value;
-      return { startX };
     })
     .onUpdate((event) => {
       'worklet';
@@ -138,8 +154,6 @@ const Drawer = ({
       } else {
         translateX.value = Math.min(Math.max(dragX, 0), drawerWidth.value);
       }
-
-      progress.value = Math.abs(translateX.value) / (drawerWidth.value || 1);
     })
     .onFinalize((event) => {
       'worklet';
@@ -157,7 +171,7 @@ const Drawer = ({
           : drawerWidth.value
         : 0;
 
-      animateDrawer(targetValue);
+      translateX.value = withSpring(targetValue, SPRING_CONFIG);
       isSwiping.value = false;
 
       if (shouldOpen) {
@@ -186,7 +200,7 @@ const Drawer = ({
 
     return {
       transform: [{ translateX: translateX.value }],
-      position: 'absolute',
+      position: 'absolute' as const,
       top: 0,
       bottom: 0,
       width: '80%',
@@ -209,13 +223,18 @@ const Drawer = ({
 
   const overlayAnimatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
-    pointerEvents: progress.value > 0 ? 'auto' : 'none',
   }));
+
+  const overlayPointerEvents = open ? 'auto' : 'none';
 
   const handleDrawerLayout = (e: LayoutChangeEvent) => {
     const width = e.nativeEvent.layout.width;
+    const prevWidth = drawerWidth.value;
     drawerWidth.value = width;
-    if (open) {
+
+    // If the drawer is open and we just got a valid width measurement,
+    // snap translateX to the correct position
+    if (open && width > 0 && prevWidth === 0) {
       translateX.value = width * (drawerPosition === 'right' ? -1 : 1);
     }
   };
@@ -235,6 +254,7 @@ const Drawer = ({
             {renderSceneContent({ progress })}
             <GestureDetector gesture={overlayGesture}>
               <Animated.View
+                pointerEvents={overlayPointerEvents}
                 style={[styles.overlay, overlayAnimatedStyle, overlayStyle]}
               />
             </GestureDetector>
@@ -257,7 +277,6 @@ const Drawer = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'white',
-    opacity: 0,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

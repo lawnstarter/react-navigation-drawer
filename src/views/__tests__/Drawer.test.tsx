@@ -67,6 +67,20 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+// On device the UI thread applies the animated style after the first layout.
+// If that style carries its own width, the drawer is measured at one width
+// and drawn at another, and while closed the difference sticks out on screen.
+describe('Drawer width', () => {
+  it('leaves the width to drawerStyle, not the animated style', () => {
+    const drawer = renderDrawer({ drawerStyle: { width: 280 } });
+    drawer.layoutDrawer(280);
+    settle();
+
+    const style = getAnimatedStyle(drawer.getByTestId('drawer-container'));
+    expect(style.width).toBe(280);
+  });
+});
+
 describe('Drawer translateX follows `open`', () => {
   it('opens fully when `open` is true before the first layout', () => {
     const drawer = renderDrawer({ open: true });

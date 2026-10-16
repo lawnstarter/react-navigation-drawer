@@ -250,11 +250,6 @@ const Drawer = ({
 
     return {
       transform: [{ translateX: translateX.value }],
-      position: 'absolute' as const,
-      top: 0,
-      bottom: 0,
-      width: '80%',
-      maxWidth: '100%',
       ...(drawerPositionValue === 'right'
         ? { right: offsetValue }
         : { left: offsetValue }),
@@ -318,8 +313,16 @@ const Drawer = ({
 };
 
 const styles = StyleSheet.create({
+  // Static so that drawerStyle, which comes after it, sets the width. The
+  // closed offset uses the measured width, so the drawer must not be drawn at
+  // a different width than the one it was laid out at.
   container: {
     backgroundColor: 'white',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '80%',
+    maxWidth: '100%',
   },
   overlay: {
     ...StyleSheet.absoluteFill,

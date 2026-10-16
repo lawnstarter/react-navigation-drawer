@@ -19,7 +19,7 @@ import Animated, {
   withSpring,
   runOnJS,
   interpolate,
-  type SharedValue,
+  SharedValue,
   Extrapolation,
 } from 'react-native-reanimated';
 import DrawerProgressContext from '../utils/DrawerProgressContext';
@@ -33,18 +33,19 @@ const SPRING_CONFIG = {
   mass: 3,
   stiffness: 1000,
   overshootClamping: true,
-  restDisplacementThreshold: 0.01,
-  restSpeedThreshold: 0.01,
 };
 
 type Props = {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  // Passed by DrawerView; unused since the move to the Gesture API.
+  // eslint-disable-next-line react/no-unused-prop-types
   onGestureRef?: (ref: PanGestureHandler | null) => void;
   gestureEnabled: boolean;
   drawerPosition: 'left' | 'right';
   drawerType: 'front' | 'back' | 'slide';
+  // eslint-disable-next-line react/no-unused-prop-types
   keyboardDismissMode: 'none' | 'on-drag';
   swipeEdgeWidth?: number;
   swipeDistanceThreshold?: number;
@@ -60,6 +61,7 @@ type Props = {
   renderSceneContent: (props: {
     progress: SharedValue<number>;
   }) => React.ReactNode;
+  // eslint-disable-next-line react/no-unused-prop-types
   gestureHandlerProps?: React.ComponentProps<typeof PanGestureHandler>;
 };
 
@@ -264,6 +266,7 @@ const Drawer = ({
             accessibilityViewIsModal={open}
             removeClippedSubviews={Platform.OS !== 'ios'}
             onLayout={handleDrawerLayout}
+            testID="drawer-container"
             style={[styles.container, drawerAnimatedStyle, drawerStyle]}
           >
             {renderDrawerContent({ progress })}

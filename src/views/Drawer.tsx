@@ -13,15 +13,16 @@ import {
   GestureDetector,
 } from 'react-native-gesture-handler';
 import Animated, {
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   useDerivedValue,
   withSpring,
-  runOnJS,
   interpolate,
-  type SharedValue,
+  SharedValue,
   Extrapolation,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import DrawerProgressContext from '../utils/DrawerProgressContext';
 
 const SWIPE_DISTANCE_MINIMUM = 5;
@@ -33,18 +34,19 @@ const SPRING_CONFIG = {
   mass: 3,
   stiffness: 1000,
   overshootClamping: true,
-  restDisplacementThreshold: 0.01,
-  restSpeedThreshold: 0.01,
 };
 
 type Props = {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  // Passed by DrawerView; unused since the move to the Gesture API.
+  // eslint-disable-next-line react/no-unused-prop-types
   onGestureRef?: (ref: PanGestureHandler | null) => void;
   gestureEnabled: boolean;
   drawerPosition: 'left' | 'right';
   drawerType: 'front' | 'back' | 'slide';
+  // eslint-disable-next-line react/no-unused-prop-types
   keyboardDismissMode: 'none' | 'on-drag';
   swipeEdgeWidth?: number;
   swipeDistanceThreshold?: number;
@@ -60,6 +62,7 @@ type Props = {
   renderSceneContent: (props: {
     progress: SharedValue<number>;
   }) => React.ReactNode;
+  // eslint-disable-next-line react/no-unused-prop-types
   gestureHandlerProps?: React.ComponentProps<typeof PanGestureHandler>;
 };
 
@@ -86,6 +89,15 @@ const Drawer = ({
   const containerWidth = useSharedValue(0);
   const isSwiping = useSharedValue(false);
   const isValidStart = useSharedValue(false);
+  const dragStartX = useSharedValue(0);
+  // The `open` prop, mirrored to the UI thread.
+  const isOpen = useSharedValue(open);
+  // True from the end of a swipe until the navigator answers the onOpen/onClose
+  // request, so the drawer holds still instead of springing to the old state.
+  const isAwaitingNavigator = useSharedValue(false);
+  const awaitingNavigatorTimeout = React.useRef<
+    ReturnType<typeof setTimeout> | undefined
+  >(undefined);
   const isStatusBarHidden = React.useRef(false);
 
   // Derive progress reactively from translateX and drawerWidth on the UI thread
@@ -104,19 +116,65 @@ const Drawer = ({
     [hideStatusBar, statusBarAnimation]
   );
 
-  // Open/close effect — runs on JS thread, withSpring works from JS in Reanimated 3+
   React.useEffect(() => {
-    if (open) {
-      const target = drawerWidth.value * (drawerPosition === 'right' ? -1 : 1);
-      if (drawerWidth.value > 0) {
+    toggleStatusBar(open);
+  }, [open, toggleStatusBar]);
+
+  // `open` is the only source of truth for where the drawer rests. Re-assert it
+  // on every render: a render means the navigator has answered any pending
+  // swipe, even when it left `open` unchanged.
+  React.useEffect(() => {
+    clearTimeout(awaitingNavigatorTimeout.current);
+    isOpen.value = open;
+    isAwaitingNavigator.value = false;
+  });
+
+  React.useEffect(
+    () => () => clearTimeout(awaitingNavigatorTimeout.current),
+    []
+  );
+
+  // The only writer that springs translateX. It runs on the UI thread whenever
+  // `open`, the measured width or the swipe state changes, so the resting
+  // position always matches `open`, whatever order those changes land in.
+  useAnimatedReaction(
+    () => ({
+      open: isOpen.value,
+      width: drawerWidth.value,
+      isSettling: !isSwiping.value && !isAwaitingNavigator.value,
+    }),
+    (current, previous) => {
+      if (!current.isSettling || current.width === 0) return;
+
+      const target = current.open
+        ? current.width * (drawerPosition === 'right' ? -1 : 1)
+        : 0;
+
+      // Before the first measurement the drawer is hidden, so jump straight
+      // to where it belongs instead of animating in from the closed position.
+      if (previous == null || previous.width === 0) {
+        translateX.value = target;
+      } else {
         translateX.value = withSpring(target, SPRING_CONFIG);
       }
-      toggleStatusBar(true);
+    },
+    [drawerPosition]
+  );
+
+  const handleSwipeEnd = (shouldOpen: boolean) => {
+    if (shouldOpen) {
+      onOpen();
     } else {
-      translateX.value = withSpring(0, SPRING_CONFIG);
-      toggleStatusBar(false);
+      onClose();
     }
-  }, [open, drawerPosition]);
+
+    // The navigator re-renders this drawer when it handles the request. If it
+    // never does, stop holding after a tick so the drawer settles on `open`.
+    clearTimeout(awaitingNavigatorTimeout.current);
+    awaitingNavigatorTimeout.current = setTimeout(() => {
+      isAwaitingNavigator.value = false;
+    }, 0);
+  };
 
   // While closed, only a touch that starts at the drawer's edge may activate the
   // pan. Without this, any horizontal drag over SWIPE_DISTANCE_MINIMUM anywhere on
@@ -129,24 +187,26 @@ const Drawer = ({
       : { left: 0, width: open ? undefined : swipeEdgeWidth };
 
   const panGesture = Gesture.Pan()
+    .withTestId('drawer-pan')
     .enabled(gestureEnabled)
     .hitSlop(edgeHitSlop)
     .activeOffsetX([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
-    .onTouchesDown((event) => {
+    .onBegin((event) => {
       'worklet';
-      isValidStart.value =
-        event.allTouches[0].absoluteX < swipeDistanceThreshold || open;
+      isValidStart.value = event.absoluteX < swipeDistanceThreshold || open;
     })
     .onStart(() => {
       'worklet';
+      dragStartX.value = translateX.value;
       isSwiping.value = isValidStart.value;
     })
     .onUpdate((event) => {
       'worklet';
       if (!isSwiping.value) return;
 
-      const dragX = translateX.value + event.translationX;
+      // translationX is cumulative since the gesture started.
+      const dragX = dragStartX.value + event.translationX;
       const isRightDrawer = drawerPosition === 'right';
 
       if (isRightDrawer) {
@@ -164,21 +224,11 @@ const Drawer = ({
         Math.abs(velocity) > swipeVelocityThreshold ||
         Math.abs(translateX.value) > swipeDistanceThreshold;
 
-      const isRightDrawer = drawerPosition === 'right';
-      const targetValue = shouldOpen
-        ? isRightDrawer
-          ? -drawerWidth.value
-          : drawerWidth.value
-        : 0;
-
-      translateX.value = withSpring(targetValue, SPRING_CONFIG);
+      // Hand the decision to the navigator; the reaction above moves the
+      // drawer once `open` reflects it.
+      isAwaitingNavigator.value = true;
       isSwiping.value = false;
-
-      if (shouldOpen) {
-        runOnJS(onOpen)();
-      } else {
-        runOnJS(onClose)();
-      }
+      scheduleOnRN(handleSwipeEnd, shouldOpen);
     });
 
   const overlayGesture = Gesture.Tap()
@@ -186,7 +236,7 @@ const Drawer = ({
     .simultaneousWithExternalGesture(panGesture)
     .onEnd(() => {
       'worklet';
-      runOnJS(onClose)();
+      scheduleOnRN(onClose);
     });
 
   const drawerAnimatedStyle = useAnimatedStyle(() => {
@@ -200,11 +250,6 @@ const Drawer = ({
 
     return {
       transform: [{ translateX: translateX.value }],
-      position: 'absolute' as const,
-      top: 0,
-      bottom: 0,
-      width: '80%',
-      maxWidth: '100%',
       ...(drawerPositionValue === 'right'
         ? { right: offsetValue }
         : { left: offsetValue }),
@@ -228,15 +273,7 @@ const Drawer = ({
   const overlayPointerEvents = open ? 'auto' : 'none';
 
   const handleDrawerLayout = (e: LayoutChangeEvent) => {
-    const width = e.nativeEvent.layout.width;
-    const prevWidth = drawerWidth.value;
-    drawerWidth.value = width;
-
-    // If the drawer is open and we just got a valid width measurement,
-    // snap translateX to the correct position
-    if (open && width > 0 && prevWidth === 0) {
-      translateX.value = width * (drawerPosition === 'right' ? -1 : 1);
-    }
+    drawerWidth.value = e.nativeEvent.layout.width;
   };
 
   const handleContainerLayout = (e: LayoutChangeEvent) => {
@@ -264,6 +301,7 @@ const Drawer = ({
             accessibilityViewIsModal={open}
             removeClippedSubviews={Platform.OS !== 'ios'}
             onLayout={handleDrawerLayout}
+            testID="drawer-container"
             style={[styles.container, drawerAnimatedStyle, drawerStyle]}
           >
             {renderDrawerContent({ progress })}
@@ -275,11 +313,19 @@ const Drawer = ({
 };
 
 const styles = StyleSheet.create({
+  // Static so that drawerStyle, which comes after it, sets the width. The
+  // closed offset uses the measured width, so the drawer must not be drawn at
+  // a different width than the one it was laid out at.
   container: {
     backgroundColor: 'white',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '80%',
+    maxWidth: '100%',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   content: {

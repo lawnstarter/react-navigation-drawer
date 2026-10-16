@@ -60,6 +60,7 @@ type State = {
  * Component that renders the drawer.
  */
 export default class DrawerView extends React.PureComponent<Props, State> {
+  // eslint-disable-next-line react/sort-comp
   static contextType = ThemeContext;
   static defaultProps = {
     lazy: true,
@@ -279,7 +280,7 @@ export default class DrawerView extends React.PureComponent<Props, State> {
     return (
       <DrawerGestureContext.Provider value={this.drawerGestureRef}>
         <Drawer
-          keyboardDismissMode='on-drag'
+          keyboardDismissMode="on-drag"
           swipeVelocityThreshold={0.3}
           open={navigation.state.isDrawerOpen}
           gestureEnabled={

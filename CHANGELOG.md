@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.1](https://github.com/lawnstarter/react-navigation-drawer/compare/v3.2.0...v3.2.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **drawer:** let taps through a closed drawer
+
 ## [2.4.1](https://github.com/lawnstarter/react-navigation-drawer/compare/v2.4.0...v2.4.1) (2024-07-10)
 
 

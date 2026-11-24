@@ -180,3 +180,38 @@ describe('Drawer translateX follows `open`', () => {
     expect(drawer.translateX()).toBe(280);
   });
 });
+
+describe('Drawer container touches', () => {
+  it('lets touches through while closed, before and after layout', () => {
+    const drawer = renderDrawer();
+
+    expect(drawer.getByTestId('drawer-container').props.pointerEvents).toBe(
+      'none'
+    );
+
+    drawer.layoutDrawer(280);
+    settle();
+
+    expect(drawer.getByTestId('drawer-container').props.pointerEvents).toBe(
+      'none'
+    );
+  });
+
+  it('takes touches while open and lets them through again once closed', () => {
+    const drawer = renderDrawer({ open: true });
+
+    drawer.layoutDrawer(280);
+    settle();
+
+    expect(drawer.getByTestId('drawer-container').props.pointerEvents).toBe(
+      'auto'
+    );
+
+    drawer.rerenderWith({ open: false });
+    settle();
+
+    expect(drawer.getByTestId('drawer-container').props.pointerEvents).toBe(
+      'none'
+    );
+  });
+});

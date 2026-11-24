@@ -299,6 +299,8 @@ const Drawer = ({
 
           <Animated.View
             accessibilityViewIsModal={open}
+            // A closed drawer must never take touches, even if its off-screen animated style was never applied.
+            pointerEvents={open ? 'auto' : 'none'}
             removeClippedSubviews={Platform.OS !== 'ios'}
             onLayout={handleDrawerLayout}
             testID="drawer-container"

@@ -47,6 +47,10 @@ function renderDrawer(props: TestProps = {}) {
       fireEvent(drawerView(), 'layout', {
         nativeEvent: { layout: { x: 0, y: 0, width, height: 800 } },
       }),
+    layoutContainer: (width: number) =>
+      fireEvent(utils.getByTestId('drawer-main'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width, height: 800 } },
+      }),
     translateX: () =>
       (getAnimatedStyle(drawerView()).transform as { translateX: number }[])[0]
         .translateX,
@@ -214,4 +218,129 @@ describe('Drawer container touches', () => {
       'none'
     );
   });
+});
+
+type SwipeCase = {
+  name: string;
+  props: TestProps;
+  startX: number;
+  panTo: number;
+  velocityX: number;
+  expected: 'onOpen' | 'onClose';
+};
+
+const OPEN_LEFT: TestProps = { open: true };
+const OPEN_RIGHT: TestProps = { open: true, drawerPosition: 'right' };
+const CLOSED_RIGHT: TestProps = { drawerPosition: 'right' };
+
+const swipeCases: SwipeCase[] = [
+  {
+    name: 'closes an open drawer on a fast swipe toward closed',
+    props: OPEN_LEFT,
+    startX: 300,
+    panTo: -180,
+    velocityX: -1500,
+    expected: 'onClose',
+  },
+  {
+    name: 'closes an open drawer on a slow drag past the threshold',
+    props: OPEN_LEFT,
+    startX: 300,
+    panTo: -100,
+    velocityX: 0,
+    expected: 'onClose',
+  },
+  {
+    name: 'keeps an open drawer open on a slow drag short of the threshold',
+    props: OPEN_LEFT,
+    startX: 300,
+    panTo: -10,
+    velocityX: 0,
+    expected: 'onOpen',
+  },
+  {
+    name: 'keeps a closed drawer closed on a slow drag short of the threshold',
+    props: {},
+    startX: 5,
+    panTo: 10,
+    velocityX: 0,
+    expected: 'onClose',
+  },
+  {
+    name: 'opens a closed drawer on a slow drag past the threshold',
+    props: {},
+    startX: 5,
+    panTo: 200,
+    velocityX: 0,
+    expected: 'onOpen',
+  },
+  {
+    name: 'opens a closed drawer on a fast swipe toward open',
+    props: {},
+    startX: 5,
+    panTo: 30,
+    velocityX: 1500,
+    expected: 'onOpen',
+  },
+  {
+    name: 'keeps an open drawer open when the release flicks toward open',
+    props: OPEN_LEFT,
+    startX: 300,
+    panTo: -100,
+    velocityX: 1500,
+    expected: 'onOpen',
+  },
+  {
+    name: 'closes an open right drawer on a fast swipe toward closed',
+    props: OPEN_RIGHT,
+    startX: 300,
+    panTo: 180,
+    velocityX: 1500,
+    expected: 'onClose',
+  },
+  {
+    name: 'opens a closed right drawer on a fast swipe from the right edge',
+    props: CLOSED_RIGHT,
+    startX: 395,
+    panTo: -200,
+    velocityX: -1500,
+    expected: 'onOpen',
+  },
+];
+
+describe('Drawer swipe decision', () => {
+  it.each(swipeCases)(
+    '$name',
+    ({ props, startX, panTo, velocityX, expected }) => {
+      const drawer = renderDrawer(props);
+      if (props.drawerPosition === 'right') {
+        drawer.layoutContainer(400);
+      }
+      drawer.layoutDrawer(280);
+      settle();
+
+      act(() => {
+        fireGestureHandler(getByGestureTestId('drawer-pan'), [
+          { state: State.BEGAN, absoluteX: startX, translationX: 0 },
+          { state: State.ACTIVE, absoluteX: startX, translationX: 0 },
+          {
+            state: State.ACTIVE,
+            absoluteX: startX + panTo,
+            translationX: panTo,
+          },
+          {
+            state: State.END,
+            absoluteX: startX + panTo,
+            translationX: panTo,
+            velocityX,
+          },
+        ]);
+      });
+      settle();
+
+      const other = expected === 'onOpen' ? 'onClose' : 'onOpen';
+      expect(drawer[expected]).toHaveBeenCalledTimes(1);
+      expect(drawer[other]).not.toHaveBeenCalled();
+    }
+  );
 });

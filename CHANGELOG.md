@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.2](https://github.com/lawnstarter/react-navigation-drawer/compare/v3.2.1...v3.2.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* **drawer:** close the drawer on a swipe toward closed
+
 ## [3.2.1](https://github.com/lawnstarter/react-navigation-drawer/compare/v3.2.0...v3.2.1) (2026-11-24)
 
 

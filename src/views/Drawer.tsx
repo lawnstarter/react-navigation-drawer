@@ -90,6 +90,7 @@ const Drawer = ({
   const isSwiping = useSharedValue(false);
   const isValidStart = useSharedValue(false);
   const dragStartX = useSharedValue(0);
+  const startedOpen = useSharedValue(false);
   // The `open` prop, mirrored to the UI thread.
   const isOpen = useSharedValue(open);
   // True from the end of a swipe until the navigator answers the onOpen/onClose
@@ -194,11 +195,17 @@ const Drawer = ({
     .failOffsetY([-SWIPE_DISTANCE_MINIMUM, SWIPE_DISTANCE_MINIMUM])
     .onBegin((event) => {
       'worklet';
-      isValidStart.value = event.absoluteX < swipeDistanceThreshold || open;
+      const isAtEdge =
+        drawerPosition === 'right'
+          ? containerWidth.value > 0 &&
+            event.absoluteX > containerWidth.value - swipeDistanceThreshold
+          : event.absoluteX < swipeDistanceThreshold;
+      isValidStart.value = isAtEdge || open;
     })
     .onStart(() => {
       'worklet';
       dragStartX.value = translateX.value;
+      startedOpen.value = isOpen.value;
       isSwiping.value = isValidStart.value;
     })
     .onUpdate((event) => {
@@ -220,9 +227,20 @@ const Drawer = ({
       if (!isSwiping.value) return;
 
       const velocity = event.velocityX;
-      const shouldOpen =
-        Math.abs(velocity) > swipeVelocityThreshold ||
-        Math.abs(translateX.value) > swipeDistanceThreshold;
+      const sign = drawerPosition === 'right' ? -1 : 1;
+      // Positive means the drawer moved toward open since the grab.
+      const moved = (translateX.value - dragStartX.value) * sign;
+
+      // Decide in the gesture's direction: a magnitude-only test reopens a
+      // drawer that was swiped closed.
+      let shouldOpen: boolean;
+      if (Math.abs(velocity) > swipeVelocityThreshold) {
+        shouldOpen = velocity * sign > 0;
+      } else if (startedOpen.value) {
+        shouldOpen = moved >= -swipeDistanceThreshold;
+      } else {
+        shouldOpen = moved > swipeDistanceThreshold;
+      }
 
       // Hand the decision to the navigator; the reaction above moves the
       // drawer once `open` reflects it.
@@ -283,7 +301,11 @@ const Drawer = ({
   return (
     <DrawerProgressContext.Provider value={progress}>
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={styles.main} onLayout={handleContainerLayout}>
+        <Animated.View
+          style={styles.main}
+          onLayout={handleContainerLayout}
+          testID="drawer-main"
+        >
           <Animated.View
             style={[styles.content, contentAnimatedStyle, sceneContainerStyle]}
             importantForAccessibility={open ? 'no-hide-descendants' : 'yes'}
